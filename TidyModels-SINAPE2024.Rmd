@@ -1,0 +1,125 @@
+---
+title: "Modelagem Estatística: Uma Jornada pelos TidyModels em R"
+author:
+- name: Tatiana Benaglia
+  affiliation: 
+  - Departamento de Estatística - IMECC - UNICAMP
+- name: Samara Kiihl
+  affiliation: Departamento de Estatística - IMECC - UNICAMP
+lang: "pt-br"  
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float:
+        collapsed: true
+        smooth_scroll: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+# Introdução
+
+
+Este tutorial faz parte do material apresentado no XXV SINAPE em Fortaleza, CE
+## Conjunto de dados utilizados
+
+Vamos carregar o pacote `tidyverse` e ler o conjunto de dados (`abalone`) que usaremos neste tutorial:
+
+```{r}
+library(tidyverse)
+
+abalone <- read_csv("abalone.csv")
+```
+
+Algumas informações rápidas dos dados:
+```{r}
+abalone %>% glimpse()
+```
+
+Temos $n=`r nrow(abalone)`$ observações. A variável resposta é `rings`.
+
+As primeiras 10 observações:
+
+```{r}
+abalone %>% head(10)
+```
+
+Para seguir neste tutorial, vamos instalar o pacote `tidymodels`:
+
+```{r}
+library(tidymodels)
+```
+
+# Data Splitting
+
+Para dividir os dados em conjuntos de treinamento e teste usamos a função `initial_split()`. Por padrão, a função separa 75\% dos dados para o treinamento e 25\% para o teste. Aqui, como exemplo, estamos usando 80\% para o treinamento e isso é especificado com `prop = 0.8`.
+
+A amostragem estratificada é feita através do argumento `strata`. A estratificação garante que os dados de teste mantenham uma distribuição próxima a dos dados de treinamento.
+
+Como a separação em treinamento e teste é feita de forma aleatorizada é importante usar `set.seed()` para garantirmos sempre a mesma divisão dos dados ao executarmos o código novamente:
+
+```{r}
+set.seed(1234)
+ring_split <- initial_split(abalone, prop = 0.8, strata = rings)
+ring_train <- training(ring_split)
+ring_test <- testing(ring_split)
+```
+
+
+# Especificando um modelo
+
+No `tidymodels`, temos alguns passos para definir um modelo:
+
+1) Escolha um modelo (*model*)
+2) Especifique um mecanismo (*engine*)
+3) Defina o modo (*mode*)
+
+
+Por exemplo, se quisermos definir um modelo de regressão linear:
+
+```{r}
+library(tidymodels)
+
+linear_reg()
+```
+
+
+Depois que a forma funcional do modelo é especificada, é necessário pensar em um mecanismo/método para ajustar ou treinar o modelo, chamado de *engine*.
+
+```{r}
+args(linear_reg)
+```
+
+
+Veja que o método *default* para `linear_reg()` é `lm`, que ajusta o modelo por mínimos quadrados ordinários, mas é possível escolher outros métodos.
+
+
+```{r}
+linear_reg() %>% 
+   set_engine("gls") 
+```
+
+Todos os modelos disponíveis são listados no site: <https://www.tidymodels.org/find/parsnip/>
+
+# Receitas
+
+
+Antes de proceder para o ajuste/treinamento do modelo é necessário:
+
+1) especificar primeiramente a fórmula
+
+2) aplicar qualquer pré-processamento nas variáveis
+
+- Alguns **modelos** exigem que os preditores tenham certas características ou certos formatos.
+
+- Alguns **dados** são melhor modelados quando um ou mais preditores são transformados.
+
+O `tidymodels` usa então o que é chamado de receita (*recipe*) para executar 
+
