@@ -23,6 +23,7 @@ nocite: |
   @misc_abalone_1
   @James2013
   @hastie01statisticallearning
+  @kuhn2022tidy
 ---
 
 ```{r setup, include=FALSE}
@@ -33,6 +34,8 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 
 
 Este material faz parte do tutorial apresentado no XXV SINAPE em Fortaleza, CE.
+
+O código fonte deste material e o conjunto de dados estão disponíveis em <https://github.com/samarafk/sinape2024>.
 
 
 # Conjunto de dados
@@ -60,15 +63,9 @@ abalone %>% head(10)
 ```
 
 
-No livro @Wickham2017R apresenta
-
-Para seguir neste tutorial, vamos instalar o pacote `tidymodels`:
-
-```{r}
-library(tidymodels)
-```
-
 # Data Splitting
+
+Agora vamos carregar o pacote `tidymodels` e separar os dados em duas partes.
 
 Para dividir os dados em conjuntos de treinamento e teste usamos a função `initial_split()`. Por padrão, a função separa 75\% dos dados para o treinamento e 25\% para o teste. Aqui, como exemplo, estamos usando 80\% para o treinamento e isso é especificado com `prop = 0.8`.
 
@@ -77,8 +74,13 @@ A amostragem estratificada é feita através do argumento `strata`. A estratific
 Como a separação em treinamento e teste é feita de forma aleatorizada é importante usar `set.seed()` para garantirmos sempre a mesma divisão dos dados ao executarmos o código novamente:
 
 ```{r}
+library(tidymodels)
 set.seed(1234)
 ring_split <- initial_split(abalone, prop = 0.8, strata = rings)
+```
+
+As funções training() e testing() são usadas para extrair os conjuntos de treinamento e teste, respectivamente:
+```{r}
 ring_train <- training(ring_split)
 ring_test <- testing(ring_split)
 ```
@@ -98,8 +100,6 @@ No `tidymodels`, temos alguns passos para especificar um modelo:
 Por exemplo, se quisermos especificar um modelo de regressão linear:
 
 ```{r}
-library(tidymodels)
-
 linear_reg()
 ```
 
@@ -113,6 +113,7 @@ args(linear_reg)
 
 Veja que o método *default* para `linear_reg()` é `lm`, que ajusta o modelo por mínimos quadrados ordinários, mas é possível escolher outros métodos.
 
+Por exemplo, um modelo de regressão linear via mínimos quadrados generalizados:
 
 ```{r}
 linear_reg() %>% 
@@ -124,17 +125,70 @@ Todos os modelos disponíveis são listados no site: <https://www.tidymodels.org
 
 # Receitas
 
-Antes de proceder para o ajuste/treinamento do modelo é necessário:
-
-1) especificar a fórmula
-
-2) aplicar qualquer pré-processamento nas variáveis
+Antes de proceder para o ajuste/treinamento do modelo, faz-se o pré-processamento dos dados, já que:
 
 - Alguns **modelos** exigem que os preditores tenham certas características ou certos formatos.
 
-- Alguns **dados** são melhor modelados quando um ou mais preditores são transformados.
+- Algumas **variáveis** requerem algum tipo de transformação.
 
-O `tidymodels` usa então o que é chamado de receita (*recipe*) para executar 
+Para isso, o `tidymodels` usa o que é chamado de receita (`recipe`).
+
+Uma primeira receita: 
+
+```{r}
+ring_rec <- recipe(rings ~ ., data = ring_train)
+```
+
+No exemplo acima, a função `recipe()` apenas define a variável resposta e os preditores através da fórmula.
+
+```{r}
+ring_rec %>% summary()
+```
+
+
+
+
+Os passos de preprocessamento de uma receita usam os dados de treinamento para os cálculos. Tipos de cálculos no processamento:
+* Níveis de uma variável categórica
+* Avaliar se uma coluna tem variância nula (constante) - `step_zv()`
+* Calcular média e desvio-padrão para a normalização
+* Projetar os novos dados nas componentes principais obtidas pelos dados de treinamento.
+
+Um outro exemplo de receita:
+
+```{r}
+ring_rec <-
+  recipe(rings ~ ., data = ring_train) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_corr(all_numeric_predictors(), threshold = 0.9) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_poly(shucked_weight, degree = 2)
+```
+
+
+A função a seguir apresenta a tabela com os dados pré-processamos segundo uma receita:
+```{r}
+kable_recipe <- function(rec) {
+  rec %>%
+    prep() %>%
+    juice() %>%
+    head(10) %>%
+    select(rings, everything()) %>%
+    kableExtra::kable(booktabs = TRUE, digits = 3, linesep = "") %>%
+    kableExtra::kable_styling(font_size = 8)
+}
+```
+
+```{r}
+kable_recipe(ring_rec)
+```
+
+
+# Workflow
+
+Gerenciar um modelo como especificamos com o `parsnip` (`model` + `engine` + `mode`) e os passos de pré-processamento definidos na receita usando `recipes`, pode ser um desafio.
+
+Para isso, o `tidymodels` propõe o uso do que é chamado de **workflow**.
 
 
 
