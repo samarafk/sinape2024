@@ -2081,7 +2081,7 @@ function toggle_visibility(id1) {
 
 <div id="introdução" class="section level1" number="1">
 <h1><span class="header-section-number">1</span> Introdução</h1>
-<p>Este material faz parte do tutorial apresentado no XXV SINAPE em Fortaleza, CE.</p>
+<p>Este material faz parte do tutorial apresentado no XXV SINAPE, realizado em Fortaleza, CE.</p>
 <p>O código fonte deste material e o conjunto de dados estão disponíveis em <a href="https://github.com/samarafk/sinape2024" class="uri">https://github.com/samarafk/sinape2024</a>.</p>
 </div>
 <div id="conjunto-de-dados" class="section level1" number="2">
@@ -2198,17 +2198,7 @@ ring_test &lt;- testing(ring_split)</code></pre>
   step_corr(all_numeric_predictors(), threshold = 0.9) %&gt;%
   step_dummy(all_nominal_predictors()) %&gt;%
   step_poly(shucked_weight, degree = 2)</code></pre>
-<p>A função a seguir apresenta a tabela com os dados pré-processamos segundo uma receita:</p>
-<pre class="r"><code>kable_recipe &lt;- function(rec) {
-  rec %&gt;%
-    prep() %&gt;%
-    juice() %&gt;%
-    head(10) %&gt;%
-    select(rings, everything()) %&gt;%
-    kableExtra::kable(booktabs = TRUE, digits = 3, linesep = &quot;&quot;) %&gt;%
-    kableExtra::kable_styling(font_size = 8)
-}</code></pre>
-<pre class="r"><code>kable_recipe(ring_rec)</code></pre>
+A tabela a seguir apresenta os dados pré-processamos segundo a receita acima:
 <div class='horizontal-scroll'><table class="table" style="font-size: 8px; margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
@@ -3062,7 +3052,7 @@ final_res</code></pre>
 Hastie, Trevor, Robert Tibshirani, and Jerome Friedman. 2001. <em>The Elements of Statistical Learning</em>. Springer Series in Statistics. New York, NY, USA: Springer New York Inc.
 </div>
 <div id="ref-James2013" class="csl-entry">
-James, Gareth, Daniela Witten, Trevor Hastie, and Robert Tibshirani. 2013. <em>An Introduction to Statistical Learning: With Applications in r</em>. Springer. <a href="https://faculty.marshall.usc.edu/gareth-james/ISL/">https://faculty.marshall.usc.edu/gareth-james/ISL/</a>.
+James, Gareth, Daniela Witten, Trevor Hastie, and Robert Tibshirani. 2013. <em>An Introduction to Statistical Learning: With Applications in r</em>. Springer. <a href="https://www.statlearning.com">https://www.statlearning.com</a>.
 </div>
 <div id="ref-kuhn2022tidy" class="csl-entry">
 Kuhn, M., and J. Silge. 2022. <em>Tidy Modeling with r</em>. O’Reilly Media. <a href="https://www.tmwr.org">https://www.tmwr.org</a>.

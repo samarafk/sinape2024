@@ -33,7 +33,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 # Introdução
 
 
-Este material faz parte do tutorial apresentado no XXV SINAPE em Fortaleza, CE.
+Este material faz parte do tutorial apresentado no XXV SINAPE, realizado em Fortaleza, CE.
 
 O código fonte deste material e o conjunto de dados estão disponíveis em <https://github.com/samarafk/sinape2024>.
 
@@ -166,8 +166,8 @@ ring_rec <-
 ```
 
 
-A função a seguir apresenta a tabela com os dados pré-processamos segundo uma receita:
-```{r}
+A tabela a seguir apresenta os dados pré-processamos segundo a receita acima:
+```{r, echo=FALSE}
 kable_recipe <- function(rec) {
   rec %>%
     prep() %>%
@@ -177,9 +177,7 @@ kable_recipe <- function(rec) {
     kableExtra::kable(booktabs = TRUE, digits = 3, linesep = "") %>%
     kableExtra::kable_styling(font_size = 8)
 }
-```
 
-```{r}
 kable_recipe(ring_rec)
 ```
 
