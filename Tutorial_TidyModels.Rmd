@@ -1,5 +1,5 @@
 ---
-title: "Modelagem Estatística: Uma Jornada pelos TidyModels em R"
+title: "Uma Jornada pelos TidyModels em R"
 author:
 - name: Tatiana Benaglia
   affiliation: 
@@ -148,7 +148,7 @@ ring_rec %>% summary()
 
 
 
-Os passos de preprocessamento de uma receita usam os dados de treinamento para os cálculos. Tipos de cálculos no processamento:
+Os passos de pré-processamento de uma receita usam os dados de treinamento para os cálculos. Tipos de cálculos no processamento:
 * Níveis de uma variável categórica
 * Avaliar se uma coluna tem variância nula (constante) - `step_zv()`
 * Calcular média e desvio-padrão para a normalização
@@ -186,11 +186,525 @@ kable_recipe(ring_rec)
 
 # Workflow
 
-Gerenciar um modelo como especificamos com o `parsnip` (`model` + `engine` + `mode`) e os passos de pré-processamento definidos na receita usando `recipes`, pode ser um desafio.
+Gerenciar um modelo especificado com o `parsnip` (`model` + `engine` + `mode`) e os passos de pré-processamento usando `recipes`, pode ser um desafio.
 
-Para isso, o `tidymodels` propõe o uso do que é chamado de **workflow**.
+Para isso, o `tidymodels` propõe o uso da função `workflow()`, que possui dois argumentos opcionais:
+
+* `preprocessor`: pode ser uma fórmula ou uma receita
+* `spec`: modelo especificado com `parsnip`
 
 
+Vamos especificar um modelo de regressão linear:
+
+```{r}
+reg_spec <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+```
+
+A receita a ser aplicada está no objeto `ring_rec`.
+
+Vamos agregar essas duas informações no *workflow*:
+
+```{r}
+reg_wf <- workflow(ring_rec, reg_spec)
+```
+
+A função `fit()` pode ser usada para ajustar o modelo usando os dados de treinamento:
+
+```{r}
+reg_fit <- fit(reg_wf, ring_train)
+```
+
+A função `predict()` calcula os valores preditos para o conjunto especificado:
+
+```{r}
+reg_fit %>% predict(ring_train)
+```
+
+
+A predição com `tidymodels` garante que:
+
+- as predições estarão sempre dentro de um dataframe/tibble;
+- os nomes e tipos das colunas são previsíveis e intuitivas;
+- o número de linhas em new_data e a saída são iguais.
+
+Pode-se usar também a função `augment()`, que calcula os valores preditos e resíduos, adicionando-os em uma coluna no conjunto de dados especificado:
+
+```{r}
+reg_fit %>%
+  augment(ring_train)
+```
+
+Para visualizar as estimativas dos parâmetros do modelo ajustado:
+```{r}
+reg_fit %>% tidy()
+```
+  
+  
+  
+# Avaliar e comparar modelos
+
+## Métricas
+
+Como avaliar se o modelo tem bom desempenho (foco em predição)?
+
+
+Olhar os resultados para cada observação não é produtivo:
+
+```{r}
+reg_fit %>%
+  augment(ring_train) %>% 
+  head()
+```
+
+Temos algumas métricas para comparar os valores preditos com os observados (erro de predição):
+
+-   Erro Quadrático Médio: $RMSE=\sqrt{\frac{1}{n}\sum_{i=1}^n(y_i-\hat{y}_i)^2}$
+-   Coeficiente de determinação: $R^2$
+-   Erro Médio Absoluto: $MAE=\frac{1}{n}\sum_{i=1}^n|y_i-\hat{y}_i|$
+
+
+Dentro de `tidymodels` temos a função `metrics()` do pacote `yardstick` para avaliar o modelo. Temos que especificar os seguintes argumentos em `metrics()`:
+
+* `truth`: nome da variável com os valores observados da resposta
+* `estimate`: nome da variável contendo os valores preditos
+
+```{r}
+augment(reg_fit, new_data = ring_train) %>%
+  metrics(rings, .pred)
+```
+
+Podemos especificar apenas uma métrica:
+
+```{r}
+augment(reg_fit, new_data = ring_train) %>%
+  rmse(rings, .pred)
+```
+
+Também é possível especificar um conjunto de métricas. No exemplo a seguir, `abalone_metrics` é definido como um conjunto de quatro métricas: RMSE, MAE, MAPE e $R^2$:
+
+```{r}
+abalone_metrics <- metric_set(rmse, mae, mape, rsq)
+```
+
+E podemos avaliar este conjunto de métricas no modelo ajustado: 
+
+```{r}
+augment(reg_fit, new_data = ring_train) %>%
+  abalone_metrics(rings, .pred)
+```
+
+
+Ao calcularmos as métricas tanto no conjunto de treinamento quanto no de teste, podemos avaliar se o modelo está super-ajustando (*overfitting*):
+
+
+::: columns
+::: {.column width="50%"}
+```{r}
+reg_fit %>%
+  augment(ring_train) %>%
+  metrics(rings, .pred)
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+reg_fit %>%
+  augment(ring_test) %>%
+  metrics(rings, .pred)
+```
+:::
+:::
+
+
+## Validação cruzada
+
+Usaremos como exemplo 5 *folds*. Para fazer a reamostragem nos dados de treinamento, usaremos o comando `vfold_cv`:
+
+```{r}
+set.seed(234)
+ring_folds <- vfold_cv(ring_train, v = 5, strata = rings)
+ring_folds
+```
+
+Ajustando o modelo nas reamostras:
+
+```{r}
+reg_cv <- fit_resamples(reg_wf, 
+                 ring_folds)
+reg_cv
+```
+
+Calculando as métricas de erro de predição
+```{r}
+reg_cv %>%
+  collect_metrics()
+```
+
+
+Para calcular um conjunto escolhido de métricas, é preciso especificar o conjunto no argumento `metrics` dentro de `fit_resamples`:
+
+```{r}
+reg_cv <- fit_resamples(reg_wf, 
+                 ring_folds,
+                 metrics = abalone_metrics)
+
+reg_cv %>%
+  collect_metrics()
+```
+
+
+Através da validação cruzada, avaliamos o desempenho do modelo apenas com os dados de treinamento, sem usar os dados de teste.
+
+A métrica obtida no conjunto de validação pode ser tomada como uma estimativa da métrica no conjunto de teste. 
+
+Para avaliar o desempenho do modelo através das métricas na validação cruzada:
+
+```{r}
+reg_cv %>%
+  collect_metrics()
+```
+
+A métrica obtida no conjunto de validação é tomada como uma estimativa da métrica no conjunto de teste.
+
+
+Caso seja necessário salvar as predições obtidas nas etapas de validação cruzada, para fazer um gráfico, por exemplo, usamos `control_resamples`:
+
+```{r}
+ctrl_abalone <- control_resamples(save_pred = TRUE)
+reg_cv <- fit_resamples(reg_wf, 
+               ring_folds, 
+               control = ctrl_abalone)
+reg_preds <- collect_predictions(reg_cv)
+reg_preds
+```
+
+
+Um gráfico de preditos versus observados, separados por cada *fold* da validação cruzada:
+
+```{r,echo=TRUE, warning=FALSE}
+#| fig-align: center
+reg_preds %>% 
+  ggplot(aes(rings, .pred, color = id)) + 
+  geom_abline(lty = 2, col = "gray", size = 1.5) +
+  geom_point(alpha = 0.5) +
+  coord_obs_pred()
+```
+
+
+## Árvore de decisão
+
+Um outro modelo a ser considerado é árvore de decisão. Vamos considerar o seguinte exemplo:
+
+```{r}
+  tree_spec <-
+  decision_tree(cost_complexity = 0.02) %>%
+  set_mode("regression") %>%
+  set_engine("rpart")
+```
+
+O modelo de árvore de regressão não requer pré-processamento, de forma que podemos usar um workflow com a fórmula e o modelo especificado, por exemplo:
+
+```{r}
+tree_wf <- workflow(rings ~ ., tree_spec)
+tree_wf
+```
+
+E o ajuste é com os dados de treinamento:
+
+```{r}
+tree_fit <- fit(tree_wf, ring_train)
+```  
+
+
+Avaliando o desempenho do modelo nas reamostras da validação cruzada:
+
+```{r}
+ctrl_abalone <- control_resamples(save_pred = TRUE)
+tree_cv <- fit_resamples(tree_wf,
+             ring_folds,
+             control = ctrl_abalone)
+collect_metrics(tree_cv)
+```
+
+Um gráfico de preditos versus observados, separados por cada *fold* da validação cruzada:
+
+```{r,echo=TRUE, warning=FALSE}
+#| fig-align: center
+collect_predictions(tree_cv) %>%
+  ggplot(aes(rings, .pred, color = id)) +
+  geom_abline(lty = 2, col = "gray", size = 1.5) +
+  geom_point(alpha = 0.5) +
+  coord_obs_pred()
+```  
+
+
+## Conjunto de modelos
+
+Como comparar vários modelos ao mesmo tempo?
+
+Primeiro vamos usar `workflow_set()` e definir os argumentos:
+
+ * `preproc`: formulas, receitas
+ * `models`: modelos especificados usando `parsnip`
+ 
+ 
+ 
+```{r}
+conj_wf <- workflow_set(
+  preproc = list(
+     rec1 = rings ~ .,
+     rec2 = ring_rec), 
+  models = list(
+  tree = tree_spec,
+  reg = reg_spec),
+  cross = FALSE)
+```
+
+
+Agora podemos avaliar os modelos com as métricas desejadas usando a validação cruzada:
+
+
+```{r}
+conj_wf %>%
+  workflow_map("fit_resamples", resamples = ring_folds)
+```
+
+E para focarmos apenas nos melhores resultados:
+
+```{r}
+conj_wf %>%
+  workflow_map("fit_resamples", resamples = ring_folds) %>%
+  rank_results()
+```  
+
+## Modelo final
+
+Suponha que o modelo de regressão linear tenha sido o escolhido.
+
+Vamos ajustar o modelo nos dados de treinamento e verificar o desempenho nos dados de teste.
+
+Vimos os comandos `fit()` e `predict()` (+ `augment()`), mas podemos usar um atalho:
+
+```{r}
+final_fit <- last_fit(reg_wf, ring_split) 
+```
+
+pois `ring_split` tem informações sobre o conjunto de treinamento e conjunto de teste.
+
+```{r}
+final_fit
+```
+
+Métricas calculadas para o conjunto de dados **teste**:
+
+```{r}
+collect_metrics(final_fit) 
+```
+
+Predições para o conjunto de dados **teste**:
+
+
+```{r}
+collect_predictions(final_fit) %>%
+  head()
+```
+
+
+```{r,echo=TRUE}
+#| fig-align: center
+collect_predictions(final_fit) %>%
+  ggplot(aes(rings, .pred)) + 
+  geom_abline(lty = 2, col = "deeppink4", size = 1.5) +
+  geom_point(alpha = 0.5) +
+  coord_obs_pred()
+```
+
+Quais informações temos em `final_fit`? 
+
+```{r}
+extract_workflow(final_fit)
+```
+
+
+# Hiperparâmetros
+
+Algumas características dos modelos não podem ser estimadas diretamente dos dados.
+
+Escolhemos um modelo de regressão linear, por exemplo, e usamos os dados de treinamento para obter os parâmetros do model.
+
+No entanto, algumas escolhas são feitas antes do ajuste do modelo: usaremos alguma forma quadrática? interações? quais variáveis vamos considerar?
+
+Algumas decisões devem ser feitas na etapa *receita* e outras devem ser feitas *dentro do modelo*.
+
+Para ajuste fino, podemos testar *workflows* diferentes e avaliar o desempenho com validação cruzada.
+
+## Regressão linear com polinômio
+
+Para um modelo de regressão linear em que uma das variáveis será considerada através de um polinômio, temos a seguinte receita:
+
+
+```{r}
+#| code-line-numbers: "4"
+ring_rec <-
+  recipe(rings ~ ., data = ring_train) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_poly(shucked_weight, degree = tune())
+```
+
+Repare que, acima, não especificamos diretamente o grau do polinômio. Vamos escolher o melhor hiperparâmetro usando a função `tune()`.
+
+Com a receita definida, vamos agregar as informações:
+
+
+```{r}
+regpol_wf <- workflow(ring_rec, linear_reg())
+regpol_wf
+```
+
+A função `tune_grid()` calcula um conjunto de métricas usando validação cruzada para avaliar o desempenho em um conjunto pré-determinado de hiperparâmetros de um modelo ou de uma receita:
+
+```{r}
+set.seed(123)
+regpol_res <- tune_grid(regpol_wf, ring_folds, grid = tibble(degree=1:6))
+regpol_res
+```
+
+Apresentando os resultados (média dos 5 *folds*) para cada grau de polinômio (hiperparâmetro) considerado:
+
+
+```{r}
+collect_metrics(regpol_res)
+```
+
+Visualização gráfica usando `autoplot()`:
+
+```{r}
+#| fig-align: 'center'
+autoplot(regpol_res, metric = "rmse")
+```
+
+Mostrando os melhores resultados:
+```{r}
+show_best(regpol_res, metric = "rmse", n = 3)
+```
+
+
+E se ajustarmos um outro modelo, também com algum outro hiperparâmetro? Como comparar?
+
+
+## Árvore de decisão
+
+A seguir temos um *workflow* para árvore de decisão com ajuste de hiperparâmetro.
+
+Primeiro, o modelo é especificado incluindo `tune()`:
+```{r}
+tree_spec <-
+  decision_tree(
+    cost_complexity = tune()
+  ) %>%
+  set_mode("regression") %>% 
+  set_engine("rpart")
+```
+
+A receita é definida:
+```{r}
+tree_rec <- 
+  recipe(rings ~ ., data = ring_train) %>%
+  step_dummy(all_nominal_predictors())
+```
+
+
+Essas duas informações são agregadaas com *workflow*:
+```{r}
+tree_wf <- workflow(tree_rec, tree_spec) 
+```
+
+Vamos usar `tune_grid()` para avaliar vários valores para o hiperparâmwtro:
+
+```{r tree-tune}
+set.seed(9)
+tree_res <-
+  tune_grid(tree_wf, 
+            resamples = ring_folds, 
+            grid = 15,
+            metrics = abalone_metrics)
+```
+
+É possível fornecer um `data.frame` na opção `grid`, para ser mais específico.
+
+Métricas obtidas através de validação cruzada considerando os valores de `grid`: 
+
+```{r}
+tree_res %>% collect_metrics()
+```
+
+Em resumo, o melhor resultado para regressão polinomial, segundo a validação cruzada:
+
+```{r}
+regpol_res %>% 
+  show_best(metric = "rmse", n = 1) %>% 
+  select(.metric, .estimator, mean, n, std_err, .config)
+```
+
+
+E melhor resultado para regressão polinomial, segundo a validação cruzada:
+
+```{r xgboost-best}
+tree_res %>% 
+  show_best(metric = "rmse", n = 1) %>% 
+  select(.metric, .estimator, mean, n, std_err, .config)
+```
+
+Entre as duas opções (regressão polinomial e árvore), vamos ficar com a regressão polinomial. Vamos selecionar o modelo com hiperparâmtro de melhor desempenho: 
+
+```{r}
+best_rmse <- select_best(regpol_res, metric = "rmse")
+best_rmse
+```
+
+E ajustando o modelo final: 
+
+
+```{r}
+final_res <-
+  regpol_wf %>% 
+  finalize_workflow(best_rmse) %>%
+  last_fit(ring_split)
+final_res
+```
+
+
+`last_fit()` ajusta o modelo final com os dados de treino e avalia o desempenho nos dados de teste. 
+
+Resultado no conjunto de teste:
+
+```{r test-res}
+final_res %>% collect_metrics()
+```
+
+
+*Workflow* final
+
+Guardar todos os passos do ajuste final (obtidos usando o conjunto de treinamento):
+```{r}
+fitted_wf <- extract_workflow(final_res)
+```
+
+Obter valores preditos:
+```{r}
+predict(fitted_wf, ring_test[1:3,])
+```
+
+*Workflow* final:
+
+
+```{r}
+final_res %>% 
+  extract_fit_parsnip() %>%
+  tidy()
+```
 
 # Referências
 
