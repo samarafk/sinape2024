@@ -157,8 +157,7 @@ Os passos de pré-processamento de uma receita usam os dados de treinamento para
 Um outro exemplo de receita:
 
 ```{r}
-ring_rec <-
-  recipe(rings ~ ., data = ring_train) %>%
+ring_rec <- recipe(rings ~ ., data = ring_train) %>%
   step_normalize(all_numeric_predictors()) %>%
   step_corr(all_numeric_predictors(), threshold = 0.9) %>%
   step_dummy(all_nominal_predictors()) %>%
@@ -211,8 +210,17 @@ reg_wf <- workflow(ring_rec, reg_spec)
 A função `fit()` pode ser usada para ajustar o modelo usando os dados de treinamento:
 
 ```{r}
-reg_fit <- fit(reg_wf, ring_train)
+reg_fit <- reg_wf %>% fit(data = ring_train)
+reg_fit
 ```
+
+
+A função `tidy()` do pacote `broom` resume as informações mais importantes de um modelo usando o conceito tidy:
+
+```{r}
+reg_fit %>% tidy(conf.int = TRUE)
+```
+
 
 A função `predict()` calcula os valores preditos para o conjunto especificado:
 
@@ -230,8 +238,7 @@ A predição com `tidymodels` garante que:
 Pode-se usar também a função `augment()`, que calcula os valores preditos e resíduos, adicionando-os em uma coluna no conjunto de dados especificado:
 
 ```{r}
-reg_fit %>%
-  augment(ring_train)
+reg_fit %>% augment(ring_train)
 ```
 
 Para visualizar as estimativas dos parâmetros do modelo ajustado:
@@ -242,6 +249,9 @@ reg_fit %>% tidy()
   
   
 # Avaliar e comparar modelos
+
+Até aqui, fizemos o pré-processamento, definimos e treinamos o modelo escolhido usando os dados de treinamento.
+
 
 ## Métricas
 
@@ -269,14 +279,16 @@ Dentro de `tidymodels` temos a função `metrics()` do pacote `yardstick` para a
 * `estimate`: nome da variável contendo os valores preditos
 
 ```{r}
-augment(reg_fit, new_data = ring_train) %>%
+reg_fit %>%
+  augment(new_data = ring_train) %>%
   metrics(rings, .pred)
 ```
 
 Podemos especificar apenas uma métrica:
 
 ```{r}
-augment(reg_fit, new_data = ring_train) %>%
+reg_fit %>%
+  augment(new_data = ring_train) %>%
   rmse(rings, .pred)
 ```
 
@@ -322,24 +334,24 @@ Usaremos como exemplo 5 *folds*. Para fazer a reamostragem nos dados de treiname
 
 ```{r}
 set.seed(234)
-ring_folds <- vfold_cv(ring_train, v = 5, strata = rings)
+ring_folds <- ring_train %>%
+                vfold_cv(v = 5, strata = rings)
 ring_folds
 ```
 
 Ajustando o modelo nas reamostras:
 
 ```{r}
-reg_cv <- fit_resamples(reg_wf, 
-                 ring_folds)
+reg_cv <- reg_wf %>% fit_resamples(ring_folds)
 reg_cv
 ```
 
-Calculando as métricas de erro de predição
+A função `collect_metrics()` extrai as métricas obtidas em cada reamostra e calcula a métrica da validação, geralmente através de uma média:
+
 ```{r}
 reg_cv %>%
   collect_metrics()
 ```
-
 
 Para calcular um conjunto escolhido de métricas, é preciso especificar o conjunto no argumento `metrics` dentro de `fit_resamples`:
 
@@ -357,16 +369,6 @@ Através da validação cruzada, avaliamos o desempenho do modelo apenas com os 
 
 A métrica obtida no conjunto de validação pode ser tomada como uma estimativa da métrica no conjunto de teste. 
 
-Para avaliar o desempenho do modelo através das métricas na validação cruzada:
-
-```{r}
-reg_cv %>%
-  collect_metrics()
-```
-
-A métrica obtida no conjunto de validação é tomada como uma estimativa da métrica no conjunto de teste.
-
-
 Caso seja necessário salvar as predições obtidas nas etapas de validação cruzada, para fazer um gráfico, por exemplo, usamos `control_resamples`:
 
 ```{r}
@@ -379,7 +381,7 @@ reg_preds
 ```
 
 
-Um gráfico de preditos versus observados, separados por cada *fold* da validação cruzada:
+Podemos fazer um gráfico de preditos versus observados, separados por cada *fold* da validação cruzada:
 
 ```{r,echo=TRUE, warning=FALSE}
 #| fig-align: center
@@ -396,10 +398,9 @@ reg_preds %>%
 Um outro modelo a ser considerado é árvore de decisão. Vamos considerar o seguinte exemplo:
 
 ```{r}
-  tree_spec <-
-  decision_tree(cost_complexity = 0.02) %>%
-  set_mode("regression") %>%
-  set_engine("rpart")
+  tree_spec <- decision_tree(cost_complexity = 0.02) %>%
+      set_mode("regression") %>%
+      set_engine("rpart")
 ```
 
 O modelo de árvore de regressão não requer pré-processamento, de forma que podemos usar um workflow com a fórmula e o modelo especificado, por exemplo:
@@ -412,37 +413,24 @@ tree_wf
 E o ajuste é com os dados de treinamento:
 
 ```{r}
-tree_fit <- fit(tree_wf, ring_train)
+tree_fit <- tree_wf %>% fit(data = ring_train)
 ```  
 
 
-Avaliando o desempenho do modelo nas reamostras da validação cruzada:
+Vamos então avaliar o desempenho da árvore de decisão usando validação cruzada:
 
 ```{r}
-ctrl_abalone <- control_resamples(save_pred = TRUE)
-tree_cv <- fit_resamples(tree_wf,
-             ring_folds,
-             control = ctrl_abalone)
-collect_metrics(tree_cv)
-```
-
-Um gráfico de preditos versus observados, separados por cada *fold* da validação cruzada:
-
-```{r,echo=TRUE, warning=FALSE}
-#| fig-align: center
-collect_predictions(tree_cv) %>%
-  ggplot(aes(rings, .pred, color = id)) +
-  geom_abline(lty = 2, col = "gray", size = 1.5) +
-  geom_point(alpha = 0.5) +
-  coord_obs_pred()
+tree_cv <- tree_wf %>% fit_resamples(ring_folds)
+  
+tree_cv %>% collect_metrics()
 ```  
 
 
 ## Conjunto de modelos
 
-Como comparar vários modelos ao mesmo tempo?
+Quando queremos comparar vários modelos ao mesmo, fica muito trabalhoso fazer um por vez, como mostramos anteriormente.
 
-Primeiro vamos usar `workflow_set()` e definir os argumentos:
+Para isso, existe a função `workflow_set()` que gera um conjunto de workflows. Os argumentos desta função são:
 
  * `preproc`: formulas, receitas
  * `models`: modelos especificados usando `parsnip`
@@ -450,14 +438,9 @@ Primeiro vamos usar `workflow_set()` e definir os argumentos:
  
  
 ```{r}
-conj_wf <- workflow_set(
-  preproc = list(
-     rec1 = rings ~ .,
-     rec2 = ring_rec), 
-  models = list(
-  tree = tree_spec,
-  reg = reg_spec),
-  cross = FALSE)
+wf_set <- workflow_set(preproc = list(rec1 = rings ~ ., rec2 = ring_rec),
+                       models = list(tree = tree_spec, reg = reg_spec),
+                       cross = FALSE)
 ```
 
 
@@ -465,31 +448,40 @@ Agora podemos avaliar os modelos com as métricas desejadas usando a validação
 
 
 ```{r}
-conj_wf %>%
-  workflow_map("fit_resamples", resamples = ring_folds)
+wf_set %>%
+  workflow_map("fit_resamples", resamples = ring_folds) %>%
+  rank_results()
 ```
 
 E para focarmos apenas nos melhores resultados:
 
 ```{r}
-conj_wf %>%
+wf_set %>%
   workflow_map("fit_resamples", resamples = ring_folds) %>%
   rank_results()
 ```  
 
-## Modelo final
+Se o argumento `cross = TRUE` o `workflow_set` faz um produto cruzado das receitas e modelos:
+
+```{r}
+workflow_set(preproc = list(rec1 = rings ~ ., rec2 = ring_rec),
+             models = list(tree = tree_spec, reg = reg_spec),
+             cross = TRUE) %>%
+  workflow_map("fit_resamples", resamples = ring_folds) %>%
+  rank_results()
+```  
 
 Suponha que o modelo de regressão linear tenha sido o escolhido.
 
 Vamos ajustar o modelo nos dados de treinamento e verificar o desempenho nos dados de teste.
 
-Vimos os comandos `fit()` e `predict()` (+ `augment()`), mas podemos usar um atalho:
+Vimos os comandos `fit()` e `predict()`/`augment()`, mas podemos usar a função `final_fit()`, que combina esses passos.
 
 ```{r}
 final_fit <- last_fit(reg_wf, ring_split) 
 ```
 
-pois `ring_split` tem informações sobre o conjunto de treinamento e conjunto de teste.
+Lembre-se que o objeto `ring_split` tem informações sobre a separação dados originais em treino e teste.
 
 ```{r}
 final_fit
@@ -525,6 +517,14 @@ Quais informações temos em `final_fit`?
 extract_workflow(final_fit)
 ```
 
+
+Quais as estimativas dos parâmetros do modelo final?
+
+```{r}
+final_fit %>% 
+  extract_fit_parsnip() %>% 
+  tidy()
+```
 
 # Hiperparâmetros
 
@@ -688,6 +688,7 @@ final_res %>% collect_metrics()
 Guardar todos os passos do ajuste final (obtidos usando o conjunto de treinamento):
 ```{r}
 fitted_wf <- extract_workflow(final_res)
+fitted_wf
 ```
 
 Obter valores preditos:
