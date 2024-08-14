@@ -79,7 +79,7 @@ set.seed(1234)
 ring_split <- initial_split(abalone, prop = 0.8, strata = rings)
 ```
 
-As funções training() e testing() são usadas para extrair os conjuntos de treinamento e teste, respectivamente:
+As funções `training()` e `testing()` são usadas para extrair os conjuntos de treinamento e teste, respectivamente:
 ```{r}
 ring_train <- training(ring_split)
 ring_test <- testing(ring_split)
