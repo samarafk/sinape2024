@@ -453,13 +453,6 @@ wf_set %>%
   rank_results()
 ```
 
-E para focarmos apenas nos melhores resultados:
-
-```{r}
-wf_set %>%
-  workflow_map("fit_resamples", resamples = ring_folds) %>%
-  rank_results()
-```  
 
 Se o argumento `cross = TRUE` o `workflow_set` faz um produto cruzado das receitas e modelos:
 
