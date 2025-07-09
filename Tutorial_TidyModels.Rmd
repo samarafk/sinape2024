@@ -474,7 +474,7 @@ Vimos os comandos `fit()` e `predict()`/`augment()`, mas podemos usar a função
 final_fit <- last_fit(reg_wf, ring_split) 
 ```
 
-Lembre-se que o objeto `ring_split` tem informações sobre a separação dados originais em treino e teste.
+Lembre-se que o objeto `ring_split` tem informações sobre a separação dos dados originais em treino e teste.
 
 ```{r}
 final_fit
@@ -523,7 +523,7 @@ final_fit %>%
 
 Algumas características dos modelos não podem ser estimadas diretamente dos dados.
 
-Escolhemos um modelo de regressão linear, por exemplo, e usamos os dados de treinamento para obter os parâmetros do model.
+Escolhemos um modelo de regressão linear, por exemplo, e usamos os dados de treinamento para obter os parâmetros do modelo.
 
 No entanto, algumas escolhas são feitas antes do ajuste do modelo: usaremos alguma forma quadrática? interações? quais variáveis vamos considerar?
 
